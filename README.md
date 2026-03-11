@@ -464,6 +464,45 @@ See `examples/` for quick snippets and monitoring patterns.
 
 ---
 
+## Development Workflow
+
+### Testing from GitHub Branches
+
+To test traktor-logger from a development branch before it's merged to main:
+
+```bash
+# Test a feature branch
+./install-traktor-mod logger install --branch feature/xyz
+./install-traktor-mod enable-metadata D2
+# Open http://localhost:8080 to verify the feature
+```
+
+### Rapid Local Development
+
+To iterate on traktor-logger locally without GitHub round-trips:
+
+```bash
+# Clone locally
+git clone https://github.com/lsmith77/traktor-logger.git ~/dev/traktor-logger
+
+# Install from local repo
+./install-traktor-mod logger install --local ~/dev/traktor-logger
+
+# Edit files in ~/dev/traktor-logger/
+# Reinstall (instant):
+./install-traktor-mod logger install --local ~/dev/traktor-logger
+```
+
+### Full Documentation
+
+For complete development workflows, branch management, and local development patterns:
+
+📖 **[LOGGER_DEVELOPMENT_WORKFLOW.md](../LOGGER_DEVELOPMENT_WORKFLOW.md)** — comprehensive guide with scenarios, troubleshooting, and best practices
+
+📋 **[LOGGER_QUICK_REFERENCE.md](../LOGGER_QUICK_REFERENCE.md)** — command quick reference
+
+---
+
 ## Security
 
 Do not log secrets (passwords, tokens, keys, personal data). Dashboard and terminal output are intended for local debugging.
