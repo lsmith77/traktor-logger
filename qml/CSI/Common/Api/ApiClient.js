@@ -13,3 +13,17 @@ function send(endpoint, data) {
     request.setRequestHeader("Content-Length", body.length)
     request.send(body)
 }
+
+function sendMetadata(type, state) {
+    var request = new XMLHttpRequest(),
+        body = JSON.stringify({
+            type: type,
+            state: state || {},
+            timestamp: new Date().toISOString()
+        })
+
+    request.open("POST", API_BASE_URL + "/metadata", true)
+    request.setRequestHeader("Content-Type", "application/json")
+    request.setRequestHeader("Content-Length", body.length)
+    request.send(body)
+}

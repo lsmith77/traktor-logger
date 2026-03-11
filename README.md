@@ -1,6 +1,6 @@
 # Traktor Logger
 
-Version: v0.1.0
+Version: v0.2.0
 
 **A real-time logging and monitoring solution for Traktor QML modding.** Track application events, controller state, and system behavior in a live browser dashboard without code restarts or log file hunting.
 
@@ -187,30 +187,29 @@ Enable metadata API integration on at least one connected controller to automati
 - **Deck state**: Track loaded, play/pause, tempo, key, sync, BPM
 - **Mixer levels**: Channel volumes, crossfader position
 - **Clock data**: Beat position, phase, master tempo
+- **Browser/playlist state**: Current browser path, selected playlist, selected row/track — requires a controller with a display (S4MK3, S8, D2); not available on screen-less controllers (X1, Z1, F1, etc.)
 
 #### Enable via install-traktor-mod
 
 1. **Install the logger first**:
 
    ```bash
-   ./install-traktor-mod --install-logger-only
+   install-traktor-mod logger install
    ```
 
-2. **Enable controller metadata integration**:
+2. **Enable controller metadata integration** (requires a controller with a display):
 
-```bash
-install-traktor-mod --enable-metadata=D2,S8,X1MK3
-```
+   ```bash
+   install-traktor-mod enable-metadata D2,S8
+   ```
 
 3. **Start the server**:
 
    ```bash
-   install-traktor-mod --start-server
+   install-traktor-mod server start
    ```
 
-`install-traktor-mod` downloads/updates the logger package and can launch the server directly with this flag.
-
-4. **View the dashboard**: Open http://localhost:8080 → **📊 Live Metadata** tab
+4. **View the dashboard**: Open http://localhost:8080 → **📊 Live Metadata** or **🎵 Browser** tab
 
 **Notes**:
 
@@ -220,7 +219,7 @@ install-traktor-mod --enable-metadata=D2,S8,X1MK3
 #### View Automatic Metadata
 
 1. **Enable metadata integration** for your active controller(s)
-2. **Start the server**: `install-traktor-mod --start-server`
+2. **Start the server**: `install-traktor-mod server start`
 3. **Launch Traktor** and interact with decks
 4. **Open dashboard**: http://localhost:8080 → **📊 Live Metadata** tab
 
@@ -313,14 +312,15 @@ logger.sendPlaylistState({
 })
 ```
 
-### Dashboard: Logs vs Metadata Tabs
+### Dashboard Tabs
 
-The browser dashboard now has **two tabs**:
+The browser dashboard has **three tabs**:
 
 - **📝 Console Logs** — All `logger.log()`, `logger.info()`, etc. messages for event tracking
-- **📊 Live Metadata** — Real-time state of decks, master clock, playlists, and controller
+- **📊 Live Metadata** — Real-time state of decks, master clock, mixer, and channels
+- **🎵 Browser** — Current browser path and a windowed list of items around the selected row
 
-Both auto-refresh every 500ms when enabled. You can disable auto-refresh for either tab independently.
+All tabs auto-refresh every 500ms when enabled.
 
 ### Fullscreen Mode
 
@@ -442,13 +442,13 @@ Send browser/playlist state (optional telemetry).
 
 ## Examples
 
-See `examples/` for quick snippets and monitoring patterns.
+See `examples/` for quick snippets and monitoring patterns, including browser/playlist telemetry via `browser-playlist-monitoring.qml`.
 
 ---
 
 ## Troubleshooting
 
-- If dashboard is unreachable, run `install-traktor-mod --start-server` (or `python3 ~/.traktor-mod/traktor-logger/server.py`).
+- If dashboard is unreachable, run `install-traktor-mod server start` (or `python3 ~/.traktor-mod/traktor-logger/server.py`).
 - If **Console Logs** is empty, verify Logger is integrated in the active QML path and restart Traktor.
 - If **Live Metadata** is empty, enable metadata integration on at least one connected controller (`--enable-metadata=...`).
 - If port `8080` is in use, update `PORT` in `server.py`.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Traktor Debug Logger Server
+Traktor Logger Server
 Receives QML debug logs via HTTP and displays them in a web dashboard.
 
 ⚠️  SECURITY WARNINGS:
@@ -550,7 +550,7 @@ def get_html_dashboard():
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Traktor Debug Logger</title>
+    <title>Traktor Logger</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
@@ -897,6 +897,94 @@ def get_html_dashboard():
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        .browser-container {
+            padding: 12px;
+        }
+        .browser-path {
+            font-size: 12px;
+            color: #93a0b1;
+            margin-bottom: 12px;
+            padding: 6px 10px;
+            background: #131a23;
+            border: 1px solid #2d3643;
+            border-radius: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .browser-path span {
+            color: #e6ebf2;
+        }
+        .browser-list {
+            border: 1px solid #2d3643;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .browser-row {
+            display: grid;
+            grid-template-columns: 32px 1fr 80px 60px 50px;
+            align-items: center;
+            padding: 5px 8px;
+            border-bottom: 1px solid #1e2733;
+            font-size: 12px;
+            color: #c7d1de;
+            gap: 8px;
+        }
+        .browser-row:last-child {
+            border-bottom: none;
+        }
+        .browser-row.selected {
+            background: rgba(90, 140, 255, 0.15);
+            border-left: 3px solid #5a8cff;
+            color: #e6ebf2;
+        }
+        .browser-row.above {
+            background: #0f1318;
+        }
+        .browser-row.below {
+            background: #111820;
+        }
+        .browser-row .br-idx {
+            color: #4e5e72;
+            font-size: 11px;
+            text-align: right;
+        }
+        .browser-row .br-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .browser-row .br-artist {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #93a0b1;
+            font-size: 11px;
+        }
+        .browser-row .br-bpm {
+            text-align: right;
+            color: #ffd9b8;
+            font-size: 11px;
+        }
+        .browser-row .br-key {
+            text-align: right;
+            font-size: 11px;
+            color: #b3c8ff;
+        }
+        .browser-row.selected .br-name {
+            font-weight: 700;
+        }
+        .browser-header {
+            display: grid;
+            grid-template-columns: 32px 1fr 80px 60px 50px;
+            padding: 4px 8px;
+            font-size: 10px;
+            color: #4e5e72;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            gap: 8px;
+            margin-bottom: 2px;
+        }
         @media (max-width: 980px) {
             .hud-master {
                 grid-template-columns: repeat(3, minmax(110px, 1fr));
@@ -1043,7 +1131,7 @@ def get_html_dashboard():
     <button class="fullscreen-close-btn" id="fullscreenCloseBtn" title="Close fullscreen (or press ESC)">✕</button>
     <div class="container">
         <header>
-            <h1>🧭 Traktor Debug Logger</h1>
+            <h1>🧭 Traktor Logger</h1>
             <div class="status">
                 <div class="status-indicator"></div>
                 <span>Listening on <code>localhost:8080</code></span>
@@ -1054,6 +1142,7 @@ def get_html_dashboard():
         <div class="tabs">
             <button class="tab-btn active" data-tab="logs">📝 Console Logs</button>
             <button class="tab-btn" data-tab="metadata">📊 Live Metadata</button>
+            <button class="tab-btn" data-tab="browser">🎵 Browser</button>
         </div>
 
         <!-- Logs Tab -->
@@ -1088,6 +1177,13 @@ def get_html_dashboard():
             <div id="debugMetadataContainer" style="display:none; margin-top: 20px;">
                 <h3 style="color: var(--accent); margin-bottom: 10px;">Raw Metadata (for debugging):</h3>
                 <pre id="debugMetadataContent" style="background: #0f1318; border: 1px solid var(--line); border-radius: 4px; padding: 12px; overflow-x: auto; font-size: 11px; max-height: 400px; overflow-y: auto;"></pre>
+            </div>
+        </div>
+
+        <!-- Browser Tab -->
+        <div id="browser" class="tab-content">
+            <div class="browser-container" id="browserContainer">
+                <div class="empty-state">No browser data received yet. Open the browser on your controller.</div>
             </div>
         </div>
     </div>
@@ -1193,6 +1289,7 @@ def get_html_dashboard():
                 .then(data => {
                     allMetadata = data;
                     renderMetadata();
+                    renderBrowser();
                 })
                 .catch(err => console.error("Error fetching metadata:", err));
         }
@@ -1334,6 +1431,59 @@ def get_html_dashboard():
             }
 
             metadataContainer.innerHTML = html;
+        }
+
+        function renderBrowser() {
+            const browserContainer = document.getElementById("browserContainer");
+            const playlist = allMetadata.playlist || {};
+            const state = playlist.state || {};
+            const items = state.items || [];
+
+            if (!state.path && items.length === 0) {
+                browserContainer.innerHTML = '<div class="empty-state">No browser data received yet. Open the browser on your controller.</div>';
+                return;
+            }
+
+            const pathSegments = (state.path || "").split(" | ").filter(s => s.length > 0);
+            const pathHtml = pathSegments.map((seg, i) =>
+                i < pathSegments.length - 1
+                    ? escapeHtml(seg) + ' <span style="color:#3a4656">›</span> '
+                    : '<span>' + escapeHtml(seg) + '</span>'
+            ).join("");
+
+            let html = '<div class="browser-path">' + (pathHtml || '—') + '</div>';
+
+            if (items.length === 0) {
+                html += '<div class="empty-state" style="margin-top:12px">No items in window</div>';
+                browserContainer.innerHTML = html;
+                return;
+            }
+
+            html += '<div class="browser-header">';
+            html += '<div>#</div><div>Name / Track</div><div>Artist</div><div>BPM</div><div>Key</div>';
+            html += '</div>';
+            html += '<div class="browser-list">';
+
+            items.forEach(item => {
+                const isSel = item.isSelected;
+                const isAbove = !isSel && item.index < (state.selectedIndex || 0);
+                const rowClass = isSel ? "selected" : (isAbove ? "above" : "below");
+                const name = item.trackName || item.nodeName || "—";
+                const artist = item.artistName || "";
+                const bpm = (item.bpm != null && item.bpm > 0) ? Number(item.bpm).toFixed(1) : "";
+                const key = item.key || "";
+
+                html += '<div class="browser-row ' + rowClass + '">';
+                html += '<div class="br-idx">' + escapeHtml(String(item.index + 1)) + '</div>';
+                html += '<div class="br-name">' + escapeHtml(name) + '</div>';
+                html += '<div class="br-artist">' + escapeHtml(artist) + '</div>';
+                html += '<div class="br-bpm">' + escapeHtml(bpm) + '</div>';
+                html += '<div class="br-key">' + escapeHtml(key) + '</div>';
+                html += '</div>';
+            });
+
+            html += '</div>';
+            browserContainer.innerHTML = html;
         }
 
         function normalizeDeckMap(decks) {
@@ -1761,7 +1911,7 @@ def get_html_dashboard():
 if __name__ == "__main__":
     PORT = 8080
     server = http.server.HTTPServer(("localhost", PORT), DebugLogHandler)
-    print(f"\n🧭 Traktor Debug Logger Server")
+    print(f"\n🧭 Traktor Logger Server")
     print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print(f"📍 localhost:{PORT}")
     if QUIET_MODE:

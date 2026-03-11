@@ -1,7 +1,7 @@
 import QtQuick 2.0
 
 /**
- * DebugLogger: Send debug messages to the Traktor Debug Logger Server
+ * DebugLogger: Send debug messages to the Traktor Logger Server
  * 
  * Usage:
  *   import "../path/to/traktor-logger/qml" as DebugLog
