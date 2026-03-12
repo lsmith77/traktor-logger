@@ -50,6 +50,11 @@ MAX_MESSAGE_LENGTH = 10 * 1024  # 10 KB per message
 MAX_DATA_SIZE = 50 * 1024  # 50 KB per data object
 RATE_LIMIT_PER_SECOND = 100  # Max logs per second across all sources
 
+# Repeated response strings
+CONTENT_TYPE_JSON = "application/json"
+ERR_PAYLOAD_TOO_LARGE = "Payload too large"
+ERR_INVALID_JSON = "Invalid JSON"
+
 # CLI logging configuration
 QUIET_MODE = "--quiet" in sys.argv or "-q" in sys.argv
 
@@ -101,21 +106,23 @@ metadata = {
 
 
 class DebugLogHandler(http.server.BaseHTTPRequestHandler):
-    def _handle_json_post(self, metadata_key, path_pattern=None):
+    def _handle_json_post(self, path_pattern=None):
         """Generic JSON POST handler with validation
 
         Args:
-            metadata_key: Key to store in metadata dict (e.g., "decks", "deck_audio")
             path_pattern: If callable, extract identifier from path using this function
 
         Returns: (success, data, identifier) tuple
         """
-        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except (ValueError, TypeError):
+            content_length = 0
         if content_length > MAX_LOG_PAYLOAD_SIZE:
             self.send_response(413)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", CONTENT_TYPE_JSON)
             self.end_headers()
-            self.wfile.write(json.dumps({"error": "Payload too large"}).encode("utf-8"))
+            self.wfile.write(json.dumps({"error": ERR_PAYLOAD_TOO_LARGE}).encode("utf-8"))
             return (False, None, None)
 
         body = self.rfile.read(content_length).decode("utf-8", errors="replace")
@@ -124,16 +131,16 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
             identifier = path_pattern(self.path) if path_pattern else None
 
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", CONTENT_TYPE_JSON)
             self.end_headers()
             self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
 
             return (True, data, identifier)
         except json.JSONDecodeError:
             self.send_response(400)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", CONTENT_TYPE_JSON)
             self.end_headers()
-            self.wfile.write(json.dumps({"error": "Invalid JSON"}).encode("utf-8"))
+            self.wfile.write(json.dumps({"error": ERR_INVALID_JSON}).encode("utf-8"))
             return (False, None, None)
 
     def _store_metadata(self, data, key, sub_key=None):
@@ -165,7 +172,7 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
                 if request_times[0] > oldest:
                     # Too many requests in last second
                     self.send_response(429)  # Too Many Requests
-                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Type", CONTENT_TYPE_JSON)
                     self.end_headers()
                     self.wfile.write(
                         json.dumps({"error": "Rate limit exceeded"}).encode("utf-8")
@@ -176,10 +183,10 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
             content_length = int(self.headers.get("Content-Length", 0))
             if content_length > MAX_LOG_PAYLOAD_SIZE:
                 self.send_response(413)  # Payload Too Large
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
                 self.wfile.write(
-                    json.dumps({"error": "Payload too large"}).encode("utf-8")
+                    json.dumps({"error": ERR_PAYLOAD_TOO_LARGE}).encode("utf-8")
                 )
                 return
 
@@ -209,7 +216,7 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
 
                 # Send response
                 self.send_response(200)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
@@ -221,32 +228,20 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
 
             except json.JSONDecodeError:
                 self.send_response(400)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": "Invalid JSON"}).encode("utf-8"))
-
-        elif path == "/logs":
-            # Return all logs as JSON
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("X-Frame-Options", "DENY")
-            self.send_header(
-                "Content-Security-Policy", "default-src 'self'; script-src 'self'"
-            )
-            self.end_headers()
-            self.wfile.write(json.dumps(list(logs)).encode("utf-8"))
+                self.wfile.write(json.dumps({"error": ERR_INVALID_JSON}).encode("utf-8"))
 
         elif path == "/metadata":
             # Receive and store metadata from QML (legacy format with type/state fields)
             content_length = int(self.headers.get("Content-Length", 0))
             if content_length > MAX_LOG_PAYLOAD_SIZE:
                 self.send_response(413)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
                 self.wfile.write(
-                    json.dumps({"error": "Payload too large"}).encode("utf-8")
+                    json.dumps({"error": ERR_PAYLOAD_TOO_LARGE}).encode("utf-8")
                 )
                 return
 
@@ -281,25 +276,25 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
                 print_cli_output("metadata", metadata_type, state)
 
                 self.send_response(200)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
 
             except json.JSONDecodeError:
                 self.send_response(400)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": "Invalid JSON"}).encode("utf-8"))
+                self.wfile.write(json.dumps({"error": ERR_INVALID_JSON}).encode("utf-8"))
 
         elif path.startswith("/metadata/deck/"):
             # Handle /metadata/deck/A, /metadata/deck/B, etc.
             content_length = int(self.headers.get("Content-Length", 0))
             if content_length > MAX_LOG_PAYLOAD_SIZE:
                 self.send_response(413)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
                 self.wfile.write(
-                    json.dumps({"error": "Payload too large"}).encode("utf-8")
+                    json.dumps({"error": ERR_PAYLOAD_TOO_LARGE}).encode("utf-8")
                 )
                 return
 
@@ -319,25 +314,25 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
                 print_cli_output("metadata", f"deck/{deck_letter}", data)
 
                 self.send_response(200)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
 
             except json.JSONDecodeError:
                 self.send_response(400)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": "Invalid JSON"}).encode("utf-8"))
+                self.wfile.write(json.dumps({"error": ERR_INVALID_JSON}).encode("utf-8"))
 
         elif path == "/metadata/master":
             # Handle /metadata/master
             content_length = int(self.headers.get("Content-Length", 0))
             if content_length > MAX_LOG_PAYLOAD_SIZE:
                 self.send_response(413)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
                 self.wfile.write(
-                    json.dumps({"error": "Payload too large"}).encode("utf-8")
+                    json.dumps({"error": ERR_PAYLOAD_TOO_LARGE}).encode("utf-8")
                 )
                 return
 
@@ -356,25 +351,25 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
                 print_cli_output("metadata", "master", data)
 
                 self.send_response(200)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
 
             except json.JSONDecodeError:
                 self.send_response(400)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": "Invalid JSON"}).encode("utf-8"))
+                self.wfile.write(json.dumps({"error": ERR_INVALID_JSON}).encode("utf-8"))
 
         elif path.startswith("/deckLoaded/"):
             # traktor-api-client: /deckLoaded/A, /deckloaded/B, etc.
             content_length = int(self.headers.get("Content-Length", 0))
             if content_length > MAX_LOG_PAYLOAD_SIZE:
                 self.send_response(413)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
                 self.wfile.write(
-                    json.dumps({"error": "Payload too large"}).encode("utf-8")
+                    json.dumps({"error": ERR_PAYLOAD_TOO_LARGE}).encode("utf-8")
                 )
                 return
 
@@ -392,7 +387,7 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
                 metadata["last_update"] = datetime.now().isoformat()
 
                 self.send_response(200)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
 
@@ -400,14 +395,14 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
 
             except json.JSONDecodeError:
                 self.send_response(400)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", CONTENT_TYPE_JSON)
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": "Invalid JSON"}).encode("utf-8"))
+                self.wfile.write(json.dumps({"error": ERR_INVALID_JSON}).encode("utf-8"))
 
         elif path.startswith("/updateDeck/"):
             # traktor-api-client: /updateDeck/A, /updateDeck/B, etc.
             success, data, deck_letter = self._handle_json_post(
-                "decks", lambda p: p.split("/")[-1]
+                lambda p: p.split("/")[-1]
             )
             if success:
                 # Merge update with existing deck state
@@ -421,16 +416,15 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
 
         elif path == "/updateMasterClock":
             # traktor-api-client: /updateMasterClock
-            success, data, _ = self._handle_json_post("master")
+            success, data, _ = self._handle_json_post()
             if success:
                 self._store_metadata(data, "master")
                 metadata["master"]["event"] = "updateMasterClock"
-                print_cli_output("metadata", "updateMasterClock", data)
 
         elif path.startswith("/updateChannel/"):
             # traktor-api-client: /updateChannel/1, /updateChannel/2, etc.
             success, data, channel = self._handle_json_post(
-                "channels", lambda p: p.split("/")[-1]
+                lambda p: p.split("/")[-1]
             )
             if success:
                 if "channels" not in metadata:
@@ -445,37 +439,27 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
 
         elif path.startswith("/updateDeckAudio/"):
             # Audio controls: volume, EQ, filter
-            success, data, deck = self._handle_json_post(
-                "deck_audio", lambda p: p.split("/")[-1]
-            )
+            success, data, deck = self._handle_json_post(lambda p: p.split("/")[-1])
             if success:
                 self._store_metadata(data, "deck_audio", deck)
 
         elif path.startswith("/updateDeckEffects/"):
-            success, data, deck = self._handle_json_post(
-                "deck_effects", lambda p: p.split("/")[-1]
-            )
+            success, data, deck = self._handle_json_post(lambda p: p.split("/")[-1])
             if success:
                 self._store_metadata(data, "deck_effects", deck)
 
         elif path.startswith("/updateDeckLoop/"):
-            success, data, deck = self._handle_json_post(
-                "deck_loops", lambda p: p.split("/")[-1]
-            )
+            success, data, deck = self._handle_json_post(lambda p: p.split("/")[-1])
             if success:
                 self._store_metadata(data, "deck_loops", deck)
 
         elif path.startswith("/updateDeckCues/"):
-            success, data, deck = self._handle_json_post(
-                "deck_cues", lambda p: p.split("/")[-1]
-            )
+            success, data, deck = self._handle_json_post(lambda p: p.split("/")[-1])
             if success:
                 self._store_metadata(data, "deck_cues", deck)
 
         elif path.startswith("/updateDeckStems/"):
-            success, data, deck = self._handle_json_post(
-                "deck_stems", lambda p: p.split("/")[-1]
-            )
+            success, data, deck = self._handle_json_post(lambda p: p.split("/")[-1])
             if success:
                 # Log stem data for debugging
                 if data and "stems" in data:
@@ -487,12 +471,12 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
                 self._store_metadata(data, "deck_stems", deck)
 
         elif path == "/updateMasterAudio":
-            success, data, _ = self._handle_json_post("master_audio")
+            success, data, _ = self._handle_json_post()
             if success:
                 self._store_metadata(data, "master_audio")
 
         elif path == "/updateBrowser":
-            success, data, _ = self._handle_json_post("browser")
+            success, data, _ = self._handle_json_post()
             if success:
                 self._store_metadata(data, "browser")
 
@@ -520,7 +504,7 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/logs":
             # Return logs as JSON
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", CONTENT_TYPE_JSON)
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
             self.end_headers()
@@ -529,7 +513,7 @@ class DebugLogHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/state":
             # Return current metadata state
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", CONTENT_TYPE_JSON)
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
             self.end_headers()
@@ -548,7 +532,7 @@ def get_html_dashboard():
     """Return HTML for the debug dashboard with logs and metadata tabs"""
     return """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>Traktor Logger</title>
     <meta charset="UTF-8">
@@ -1128,50 +1112,51 @@ def get_html_dashboard():
     </style>
 </head>
 <body>
-    <button class="fullscreen-close-btn" id="fullscreenCloseBtn" title="Close fullscreen (or press ESC)">✕</button>
+    <button class="fullscreen-close-btn" id="fullscreenCloseBtn" aria-label="Close fullscreen (or press Escape)">✕</button>
+    <main>
     <div class="container">
         <header>
-            <h1>🧭 Traktor Logger</h1>
-            <div class="status">
-                <div class="status-indicator"></div>
+            <h1><span aria-hidden="true">🧭</span> Traktor Logger</h1>
+            <div class="status" role="status" aria-label="Server status">
+                <div class="status-indicator" aria-hidden="true"></div>
                 <span>Listening on <code>localhost:8080</code></span>
             </div>
         </header>
 
         <!-- Tabs -->
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="logs">📝 Console Logs</button>
-            <button class="tab-btn" data-tab="metadata">📊 Live Metadata</button>
-            <button class="tab-btn" data-tab="browser">🎵 Browser</button>
+        <div class="tabs" role="tablist" aria-label="Dashboard sections">
+            <button class="tab-btn active" role="tab" id="tab-logs" aria-selected="true" aria-controls="logs" data-tab="logs"><span aria-hidden="true">📝</span> Console Logs</button>
+            <button class="tab-btn" role="tab" id="tab-metadata" aria-selected="false" aria-controls="metadata" data-tab="metadata"><span aria-hidden="true">📊</span> Live Metadata</button>
+            <button class="tab-btn" role="tab" id="tab-browser" aria-selected="false" aria-controls="browser" data-tab="browser"><span aria-hidden="true">🎵</span> Browser</button>
         </div>
 
         <!-- Logs Tab -->
-        <div id="logs" class="tab-content active">
+        <div id="logs" class="tab-content active" role="tabpanel" aria-labelledby="tab-logs">
             <div class="controls">
-                <button id="refreshBtn">🔄 Auto-refresh (on)</button>
-                <button id="clearBtn" class="danger">🗑️ Clear logs</button>
+                <button id="refreshBtn" aria-pressed="true"><span aria-hidden="true">🔄</span> Auto-refresh ON</button>
+                <button id="clearBtn" class="danger"><span aria-hidden="true">🗑️</span> Clear logs</button>
             </div>
 
-            <div class="filter-controls">
-                <button class="filter-btn active" data-level="all">All</button>
-                <button class="filter-btn" data-level="debug">🔵 Debug</button>
-                <button class="filter-btn" data-level="info">🟢 Info</button>
-                <button class="filter-btn" data-level="warn">🟡 Warn</button>
-                <button class="filter-btn" data-level="error">🔴 Error</button>
+            <div class="filter-controls" role="group" aria-label="Filter logs by level">
+                <button class="filter-btn active" data-level="all" aria-pressed="true">All</button>
+                <button class="filter-btn" data-level="debug" aria-pressed="false"><span aria-hidden="true">🔵</span> Debug</button>
+                <button class="filter-btn" data-level="info" aria-pressed="false"><span aria-hidden="true">🟢</span> Info</button>
+                <button class="filter-btn" data-level="warn" aria-pressed="false"><span aria-hidden="true">🟡</span> Warn</button>
+                <button class="filter-btn" data-level="error" aria-pressed="false"><span aria-hidden="true">🔴</span> Error</button>
             </div>
 
-            <div class="log-container" id="logContainer">
+            <div class="log-container" id="logContainer" role="log" aria-live="polite" aria-label="Console log output">
                 <div class="empty-state">Waiting for logs...</div>
             </div>
         </div>
 
         <!-- Metadata Tab -->
-        <div id="metadata" class="tab-content">
+        <div id="metadata" class="tab-content" role="tabpanel" aria-labelledby="tab-metadata">
             <div class="controls">
-                <button id="toggleDebugMetadata">🔍 Raw Metadata (off)</button>
-                <button id="fullscreenBtn" class="fullscreen-btn">⛶ Fullscreen</button>
+                <button id="toggleDebugMetadata" aria-pressed="false"><span aria-hidden="true">🔍</span> Raw Metadata OFF</button>
+                <button id="fullscreenBtn" class="fullscreen-btn" aria-expanded="false"><span aria-hidden="true">⛶</span> Fullscreen</button>
             </div>
-            <div class="metadata-container" id="metadataContainer">
+            <div class="metadata-container" id="metadataContainer" aria-live="polite">
                 <div class="empty-state">No metadata received yet. Interact with Traktor to send deck/master state.</div>
             </div>
             <div id="debugMetadataContainer" style="display:none; margin-top: 20px;">
@@ -1181,12 +1166,13 @@ def get_html_dashboard():
         </div>
 
         <!-- Browser Tab -->
-        <div id="browser" class="tab-content">
-            <div class="browser-container" id="browserContainer">
+        <div id="browser" class="tab-content" role="tabpanel" aria-labelledby="tab-browser">
+            <div class="browser-container" id="browserContainer" aria-live="polite">
                 <div class="empty-state">No browser data received yet. Open the browser on your controller.</div>
             </div>
         </div>
     </div>
+    </main>
 
     <script>
         let autoRefresh = true;
@@ -1214,16 +1200,23 @@ def get_html_dashboard():
         tabBtns.forEach(btn => {
             btn.addEventListener("click", () => {
                 const tabId = btn.dataset.tab;
-                tabBtns.forEach(b => b.classList.remove("active"));
+                tabBtns.forEach(b => {
+                    b.classList.remove("active");
+                    b.setAttribute("aria-selected", "false");
+                });
                 tabContents.forEach(c => c.classList.remove("active"));
                 btn.classList.add("active");
+                btn.setAttribute("aria-selected", "true");
                 document.getElementById(tabId).classList.add("active");
             });
         });
 
         refreshBtn.addEventListener("click", () => {
             autoRefresh = !autoRefresh;
-            refreshBtn.textContent = autoRefresh ? "🔄 Auto-refresh ON" : "⏸️ Auto-refresh OFF";
+            refreshBtn.setAttribute("aria-pressed", String(autoRefresh));
+            refreshBtn.innerHTML = autoRefresh
+                ? '<span aria-hidden="true">🔄</span> Auto-refresh ON'
+                : '<span aria-hidden="true">⏸️</span> Auto-refresh OFF';
         });
 
         clearBtn.addEventListener("click", () => {
@@ -1235,8 +1228,12 @@ def get_html_dashboard():
 
         filterBtns.forEach(btn => {
             btn.addEventListener("click", () => {
-                filterBtns.forEach(b => b.classList.remove("active"));
+                filterBtns.forEach(b => {
+                    b.classList.remove("active");
+                    b.setAttribute("aria-pressed", "false");
+                });
                 btn.classList.add("active");
+                btn.setAttribute("aria-pressed", "true");
                 selectedLevel = btn.dataset.level;
                 renderLogs();
             });
@@ -1245,31 +1242,36 @@ def get_html_dashboard():
         toggleDebugMetadataBtn.addEventListener("click", () => {
             showDebugMetadata = !showDebugMetadata;
             debugMetadataContainer.style.display = showDebugMetadata ? "block" : "none";
-            toggleDebugMetadataBtn.textContent = showDebugMetadata 
-                ? "🔍 Raw Metadata ON" 
-                : "🔍 Raw Metadata OFF";
+            toggleDebugMetadataBtn.setAttribute("aria-pressed", String(showDebugMetadata));
+            toggleDebugMetadataBtn.innerHTML = showDebugMetadata
+                ? '<span aria-hidden="true">🔍</span> Raw Metadata ON'
+                : '<span aria-hidden="true">🔍</span> Raw Metadata OFF';
         });
+
+        function exitFullscreen() {
+            isFullscreen = false;
+            document.body.classList.remove("fullscreen-mode");
+            fullscreenBtn.setAttribute("aria-expanded", "false");
+            fullscreenBtn.innerHTML = '<span aria-hidden="true">⛶</span> Fullscreen';
+        }
 
         // Fullscreen toggle
         fullscreenBtn.addEventListener("click", () => {
             isFullscreen = !isFullscreen;
             document.body.classList.toggle("fullscreen-mode", isFullscreen);
-            fullscreenBtn.textContent = isFullscreen ? "✕ Exit Fullscreen" : "⛶ Fullscreen";
+            fullscreenBtn.setAttribute("aria-expanded", String(isFullscreen));
+            fullscreenBtn.innerHTML = isFullscreen
+                ? '<span aria-hidden="true">✕</span> Exit Fullscreen'
+                : '<span aria-hidden="true">⛶</span> Fullscreen';
         });
 
         // Fullscreen close button click
-        fullscreenCloseBtn.addEventListener("click", () => {
-            isFullscreen = false;
-            document.body.classList.remove("fullscreen-mode");
-            fullscreenBtn.textContent = "⛶ Fullscreen";
-        });
+        fullscreenCloseBtn.addEventListener("click", exitFullscreen);
 
         // ESC key to exit fullscreen
         document.addEventListener("keydown", (e) => {
             if (e.key === "Escape" && isFullscreen) {
-                isFullscreen = false;
-                document.body.classList.remove("fullscreen-mode");
-                fullscreenBtn.textContent = "⛶ Fullscreen";
+                exitFullscreen();
             }
         });
 
@@ -1610,7 +1612,7 @@ def get_html_dashboard():
                     <div style="margin-top: 8px; padding: 6px; background: rgba(102,204,255,0.1); border: 1px solid #3a4656; border-radius: 4px;">
                         <div style="font-size: 9px; color: #66ccff; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; font-weight: 700;">FX</div>
                         <div style="font-size: 10px; color: #99ddff;">
-                            ${effectsData.active_effects ? effectsData.active_effects.join(", ") : "None"}
+                            ${effectsData.active_effects ? effectsData.active_effects.map(escapeHtml).join(", ") : "None"}
                         </div>
                     </div>
                     ` : ''}
@@ -1629,7 +1631,7 @@ def get_html_dashboard():
                     <div style="margin-top: 8px; padding: 6px; background: rgba(200,180,255,0.1); border: 1px solid #3a4656; border-radius: 4px;">
                         <div style="font-size: 9px; color: #d4b5ff; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; font-weight: 700;">Cues (${cueData.cue_points.length})</div>
                         <div style="font-size: 9px; color: #e0c7ff; display: flex; flex-wrap: wrap; gap: 4px;">
-                            ${cueData.cue_points.slice(0, 3).map((c, idx) => `<span style="background: #2d2545; padding: 2px 4px; border-radius: 2px;">#${idx + 1} ${c.name || 'Cue'}</span>`).join('')}
+                            ${cueData.cue_points.slice(0, 3).map((c, idx) => `<span style="background: #2d2545; padding: 2px 4px; border-radius: 2px;">#${idx + 1} ${escapeHtml(c.name || 'Cue')}</span>`).join('')}
                         </div>
                     </div>
                     ` : ''}
@@ -1829,7 +1831,7 @@ def get_html_dashboard():
             return `
                 <div style="margin-bottom: 6px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-                        <span style="font-size: 9px; color: #93a0b1; text-transform: uppercase; letter-spacing: 0.04em;">${label}</span>
+                        <span style="font-size: 9px; color: #93a0b1; text-transform: uppercase; letter-spacing: 0.04em;">${escapeHtml(label)}</span>
                         <span style="font-size: 10px; color: ${color}; font-weight: 600;">${percent}%</span>
                     </div>
                     <div style="width: 100%; height: 16px; background: #0f1318; border: 1px solid #1f2630; border-radius: 2px; overflow: hidden;">
@@ -1915,19 +1917,19 @@ if __name__ == "__main__":
     print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print(f"📍 localhost:{PORT}")
     if QUIET_MODE:
-        print(f"🔇 Quiet mode: CLI output suppressed")
+        print("🔇 Quiet mode: CLI output suppressed")
     else:
-        print(f"📝 Real-time logs appear here + on dashboard")
+        print("📝 Real-time logs appear here + on dashboard")
     print(f"\n🔗 Open browser: http://localhost:{PORT}")
-    print(f"\n⚠️  SECURITY:")
-    print(f"  • Do NOT log passwords, API keys, tokens, or credentials")
-    print(f"  • localhost-only binding (no network exposure)")
-    print(f"  • No authentication — local access only")
-    print(f"  • Data in memory, plaintext, never encrypted")
+    print("\n⚠️  SECURITY:")
+    print("  • Do NOT log passwords, API keys, tokens, or credentials")
+    print("  • localhost-only binding (no network exposure)")
+    print("  • No authentication — local access only")
+    print("  • Data in memory, plaintext, never encrypted")
     print(
         f"  • Rate limits: {RATE_LIMIT_PER_SECOND} logs/sec, {MAX_LOG_PAYLOAD_SIZE/1024:.0f}KB max per entry"
     )
-    print(f"\nPress Ctrl+C to stop\n")
+    print("\nPress Ctrl+C to stop\n")
 
     try:
         server.serve_forever()
