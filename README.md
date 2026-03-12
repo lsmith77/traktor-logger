@@ -43,6 +43,8 @@ When you install with `logger install`, it automatically:
 
 **Important**: The server can run immediately, but Live Metadata only appears once API integration is active on a connected controller.
 
+> **Disclaimer:** The server.py Python server and QML files are vibe coded via AI with minimal code review. Use with caution and review scripts before production use.
+
 ## Quick Start (install-traktor-mod workflow)
 
 Use the `install-traktor-mod` script from the main handbook repo to install and wire the logger package cleanly.
