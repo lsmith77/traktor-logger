@@ -10,31 +10,29 @@ When working with Traktor QML mods, understanding application behavior and contr
 
 - ✅ **This tool**: Real-time HTTP-based logging and event monitoring displayed in a browser dashboard
 
-## API Client Lineage and Integration
+## Credits
 
-`traktor-logger` now includes the API client functionality directly, so you do not need to install a separate `traktor-api-client` package.
+The integrated API layer is based on the original project by Erik Minekus:
 
-**Lineage note**: the integrated API layer is based on the original project by Erik Minekus:
+https://github.com/ErikMinekus/traktor-api-client
 
-- https://github.com/ErikMinekus/traktor-api-client
+The playlist API layer is based on the work from DJMirror:
+https://www.patreon.com/cw/DjMirrorTraktor
 
-**This package combines two capabilities for complete logging and monitoring**:
+Both projects where pivotal in the creation of this solution that integrates both concepts and advances the APIs while providing a ready made UI.
 
-1. **traktor-logger** (this project): Manual HTTP logging via `Logger` QML component
-2. **traktor-api-client lineage** (Erik Minekus): Automatic metadata collection from controllers
+## API Client Integration
 
-**The result**: Install once, get both manual event logs AND automatic real-time state tracking (deck status, mixer levels, BPM, etc.) flowing to the same dashboard.
-
-First install the `traktor-mod` script from:
+First install the `traktor-mod` script from (for manual install instructions see #manual-installation-without-traktor-mod):
 
 - https://github.com/lsmith77/traktor-kontrol-qml
 - Setup and usage guide: https://github.com/lsmith77/traktor-kontrol-qml/blob/main/00_HANDBOOK.md
 
 When you install with `logger install`, it automatically:
 
+- Downloads/updates the logger package (including server code)
 - Installs Logger.qml for manual logging
 - Installs Api modules for automatic metadata collection
-- Downloads/updates the logger package (including server code)
 
 **Two complementary logging approaches**:
 
@@ -53,30 +51,31 @@ Use the `traktor-mod` script from the main handbook repo to install and wire the
 
 ```bash
 traktor-mod logger install
-traktor-mod enable-metadata D2  # replace D2 with your controller (S4MK3, S8, X1MK3, etc.)
+traktor-mod enable-metadata S8 # use D2 if you have a physical D2
 ```
 
-This installs:
+`enable-metadata S8` wires API integration into the S8 controller QML. You don't need a physical S8 — see step 2.
 
-- `Logger.qml` for manual `logger.info/debug/warn/error` output
-- API modules for metadata transport
-- server files under `~/.traktor-mod/traktor-logger`
+### 2. Register S8 in Traktor's Controller Manager
 
-`enable-metadata` wires API integration into the chosen controller so live deck/mixer state flows to the dashboard. Pick one controller only — `ApiModule` monitors all decks globally, so wiring it into more than one causes duplicate events.
+Traktor only loads a controller's QML when that controller is registered. Skip this stepif you have a physical S8 or D2 connected.
 
-### 2. Start the logger server
+Adding S8 as a pre-mapped controller (even without the hardware) is enough:
+
+1. Launch Traktor Pro
+2. Go to **Preferences** (⌘, on macOS or Ctrl+, on Windows)
+3. Select the **Controller Manager** tab
+4. Click **Add** → **Pre-Mapped** → **Traktor Kontrol** → **S8**
+
+### 3. Start the logger server
 
 ```bash
 traktor-mod server start
 ```
 
-### 3. Open dashboard
+### 4. Open dashboard and test
 
-Open `http://localhost:8080`.
-
-### 4. Restart Traktor and test
-
-Interact with decks/controls and verify both tabs update.
+Open `http://localhost:8080`, restart Traktor, and interact with decks to verify both tabs update.
 
 ### Relevant install documentation (handbook)
 
@@ -137,11 +136,11 @@ Restart Traktor. The logger is now available via `import Traktor.Defines 1.0` in
 
 Metadata lets the logger automatically report deck state, tempo, channel info, and browser activity.
 
-#### Enable for one controller (e.g., D2, S8, X1MK3)
+#### Wire ApiModule into a controller
 
-Pick one controller that will always be connected. `ApiModule` monitors all decks and channels globally — injecting it into more than one controller causes duplicate events.
+The recommended approach is to use S8 — you can register it as a virtual controller in Traktor without physical hardware. If you have a D2, use D2 instead (it's already registered, no extra step needed).
 
-1. Open `<qml>/CSI/D2/D2.qml` in a text editor (replace `D2` with your controller: S4MK3, S8, X1MK3, etc.)
+1. Open `<qml>/CSI/S8/S8.qml` in a text editor (or `D2/D2.qml` if you have a D2).
 
 2. Add this line immediately after the last `import`:
 
@@ -163,27 +162,29 @@ Pick one controller that will always be connected. `ApiModule` monitors all deck
 
 4. Save the file.
 
+5. Register S8 in Traktor's Controller Manager (skip if you used D2 or already have a physical S8):
+   1. Launch Traktor Pro
+   2. Go to **Preferences** (⌘, on macOS or Ctrl+, on Windows)
+   3. Select the **Controller Manager** tab
+   4. Click **Add** → **Pre-Mapped** → **Traktor Kontrol** → **S8**
+
 #### Enable browser monitoring
 
-For each `Screen.qml` under `<qml>/Screens/` (e.g., `Screens/S4MK3/Screen.qml`):
+S8 and D2 share the same screen file (`Screens/S8/Views/Screen.qml`), which is instantiated twice (left + right). Gate `ApiBrowser` with `isLeftScreen` to avoid duplicate posts.
 
-1. Add an import after the last `import` line. The path is relative — count how many folders deep the file sits below `Screens/`:
-   - One folder deep (e.g., `Screens/S4MK3/Screen.qml`): `import "../Common" as LoggerScreens`
-   - Two folders deep: `import "../../Common" as LoggerScreens`
+1. Open `<qml>/Screens/S8/Views/Screen.qml` (D2 has no separate screen folder — it uses this same file).
 
-2. Find the first `{` after the imports (the root element's opening brace). Add on the next line:
-
+2. Add this import after the last `import` line:
    ```qml
-   LoggerScreens.ApiBrowser {}
+   import "../../Common" as LoggerScreens
    ```
 
-   If the file contains `isLeftScreen`, use this instead (only one screen reports browser data):
-
+3. Add this as the first child of the root element (the first `{` after the imports):
    ```qml
    LoggerScreens.ApiBrowser { active: isLeftScreen }
    ```
 
-3. Save the file.
+4. Save the file.
 
 Restart Traktor, then open the logger dashboard at `http://localhost:8080`.
 
@@ -292,17 +293,18 @@ Enable metadata API integration on at least one connected controller to automati
 
 #### Enable via traktor-mod
 
-1. **Install the logger first**:
+1. **Install the logger and wire a controller**:
 
    ```bash
    traktor-mod logger install
+   traktor-mod enable-metadata S8
    ```
 
-2. **Enable controller metadata integration** (requires a controller with a display):
+   > **D2 users**: use `enable-metadata D2` — no need to add a virtual S8.
+   > **S8 users**: use `enable-metadata S8` — no need to add a pre-mapped S8 in step 2.
 
-   ```bash
-   traktor-mod enable-metadata D2,S8
-   ```
+2. **Register S8 in Traktor** (skip if you used D2 or have a physical S8):
+   - Traktor: **Preferences** (⌘, / Ctrl+,) → **Controller Manager** → **Add** → **Pre-Mapped** → **Traktor Kontrol** → **S8**
 
 3. **Start the server**:
 
@@ -314,7 +316,6 @@ Enable metadata API integration on at least one connected controller to automati
 
 **Notes**:
 
-- Metadata requires at least one integrated controller that is connected and active.
 - If only Logger is installed and no metadata integration is enabled, Live Metadata remains empty.
 
 #### View Automatic Metadata
