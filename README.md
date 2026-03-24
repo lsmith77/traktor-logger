@@ -1,6 +1,6 @@
 # Traktor Logger
 
-Version: v0.2.0
+Version: v1.0.0
 
 **A real-time logging and monitoring solution for Traktor QML modding.** Track application events, controller state, and system behavior in a live browser dashboard without code restarts or log file hunting.
 
