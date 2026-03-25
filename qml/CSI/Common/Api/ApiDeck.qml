@@ -16,6 +16,7 @@ Item {
 
   readonly property string    deckLetter:   String.fromCharCode(65 + deckId)
   readonly property var       hotcueTypes:  ["cue", "fadeIn", "fadeOut", "load", "grid", "loop"]
+  readonly property var       loopSizes:    ["1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8", "16", "32"]
   readonly property string    pathPrefix:   "app.traktor.decks." + (deckId+1) + "."
 
   AppProperty { path: pathPrefix + "is_loaded";         onValueChanged: deckLoadedTimer.start() }
@@ -42,6 +43,10 @@ Item {
   AppProperty { id: propResultingKey;  path: pathPrefix + "track.key.resulting.precise";  onValueChanged: keyChangedTimer.restart() }
   AppProperty { id: propDeckType;      path: pathPrefix + "type";                          onValueChanged: deckTypeChangedTimer.restart() }
   AppProperty { id: propActiveSlot;    path: pathPrefix + "active_slot";                   onValueChanged: deckTypeChangedTimer.restart() }
+
+  // Loop properties
+  AppProperty { id: propLoopActive; path: pathPrefix + "loop.active"; onValueChanged: loopChangedTimer.restart() }
+  AppProperty { id: propLoopSize;   path: pathPrefix + "loop.size";   onValueChanged: loopChangedTimer.restart() }
 
   // Stem properties (stems 1-4)
   AppProperty { id: propStem1Volume;    path: pathPrefix + "stems.1.volume";       onValueChanged: stemChangedTimer.restart() }
@@ -109,6 +114,8 @@ Item {
     onTriggered: {
       var cueIdxs = findCueIdxs()
 
+      ApiClient.send("updateDeckCues/" + deckLetter, { cues: buildCueList() })
+
       ApiClient.send("deckLoaded/" + deckLetter, {
         filePath:     getFilePath(),
         title:        propTitle.value,
@@ -155,6 +162,17 @@ Item {
       ApiClient.send("updateDeck/" + deckLetter, {
         deckType:   propDeckType.value,
         activeSlot: propActiveSlot.value,
+      })
+    }
+  }
+  Timer {
+    id: loopChangedTimer
+    interval: 250
+
+    onTriggered: {
+      ApiClient.send("updateDeckLoop/" + deckLetter, {
+        active: propLoopActive.value,
+        size:   loopSizes[propLoopSize.value] || propLoopSize.value,
       })
     }
   }
@@ -222,6 +240,15 @@ Item {
     }
   }
 
+  function buildCueList() {
+    var cues = []
+    for (var i = 0; i < hotcueExists.length; i++) {
+      if (hotcueExists[i]) {
+        cues.push({ name: hotcueName[i], pos: hotcuePos[i], type: hotcueType[i] })
+      }
+    }
+    return cues
+  }
   function findCueIdxs() {
     var hotcueIdxs = getHotcueOrder()
     var nextCuePos = propNextCuePoint.value/1000
