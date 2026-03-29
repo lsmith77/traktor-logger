@@ -253,61 +253,21 @@ http://localhost:8080/openapi.yaml
 
 Both links are also available in the dashboard header.
 
-#### Which QML file uses which endpoints
-
-| QML file             | Endpoints used                                                                                                      |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `Logger.qml`         | `POST /log` — manual debug messages (`logger.log()`, `.info()`, `.warn()`, `.error()`)                              |
-| `Logger.qml`         | `POST /metadata` — manual metadata helpers (`logger.sendDeckState()`, `.sendMasterState()`, `.sendPlaylistState()`) |
-| `ApiDeck.qml`        | `POST /deckLoaded/{deck}` — full snapshot on track load                                                             |
-| `ApiDeck.qml`        | `POST /updateDeck/{deck}` — partial updates (play state, tempo, key, elapsed time)                                  |
-| `ApiDeck.qml`        | `POST /updateDeckLoop/{deck}` — loop active and loop size                                                           |
-| `ApiDeck.qml`        | `POST /updateDeckCues/{deck}` — full hot cue list on track load                                                     |
-| `ApiDeck.qml`        | `POST /updateDeckStems/{deck}` — stem volume/filter state on stem decks                                             |
-| `ApiMasterClock.qml` | `POST /updateMasterClock` — master BPM and master deck changes                                                      |
-| `ApiChannel.qml`     | `POST /updateChannel/{N}` — channel on-air state and volume level                                                   |
-| `ApiBrowser.qml`     | `POST /updateBrowser` — browser/playlist state (requires a controller with a screen)                                |
-
 ---
 
-### `logger.log(message, [data])`
+All methods accept a `message` string and an optional `data` object:
 
-Send an info-level message.
-
-```qml
-logger.log("User clicked button", { button: "SYNC", deck: 1 })
-```
-
-### `logger.info(message, [data])`
-
-Send an info-level message (same as `log`).
+| Method                      | Level        |
+| --------------------------- | ------------ |
+| `logger.log(msg, [data])`   | info (alias) |
+| `logger.info(msg, [data])`  | info         |
+| `logger.debug(msg, [data])` | debug        |
+| `logger.warn(msg, [data])`  | warn         |
+| `logger.error(msg, [data])` | error        |
 
 ```qml
-logger.info("App initialized")
-```
-
-### `logger.debug(message, [data])`
-
-Send a debug-level message (useful for detailed state).
-
-```qml
-logger.debug("Current tempo", { bpm: 120.5 })
-```
-
-### `logger.warn(message, [data])`
-
-Send a warning-level message.
-
-```qml
-logger.warn("Feature not supported", { controller: "Z1MK2" })
-```
-
-### `logger.error(message, [data])`
-
-Send an error-level message.
-
-```qml
-logger.error("Failed to sync", { reason: "Network timeout" })
+logger.info("Mapping loaded")
+logger.warn("Experimental feature active", { feature: "custom-knob" })
 ```
 
 ---
@@ -389,66 +349,11 @@ If automatic collection doesn't suit your needs, you can manually send metadata 
 
 ### Metadata API
 
-The Logger provides methods to send different types of metadata:
-
-### `logger.sendDeckState(deckId, state)`
-
-Send deck state (play, BPM, track info, etc). Shown in dashboard under "Live Metadata" tab.
-
-```qml
-Logger { id: logger }
-
-// Track deck state and send periodically
-Timer {
-    interval: 1000
-    repeat: true
-    running: deck1IsPlaying
-
-    onTriggered: {
-        logger.sendDeckState(0, {  // deckId = 0 (Deck A)
-            title: currentTrack.title,
-            artist: currentTrack.artist,
-            bpm: 120.5,
-            tempo: 100,
-            playing: true,
-            elapsed: "1:23",
-            synced: false
-        })
-    }
-}
-```
-
-### `logger.sendMasterState(state)`
-
-Send master BPM, tempo, and other master properties.
-
-```qml
-Logger { id: logger }
-
-AppProperty { id: masterBpm; path: "app.traktor.master.bpm.base_bpm" }
-
-onMasterBpmChanged: {
-    logger.sendMasterState({
-        bpm: masterBpm.value,
-        tempo: 100
-    })
-}
-```
-
-### `logger.sendPlaylistState(state)`
-
-Send playlist info (selected track, track count, playlist name, etc).
-
-```qml
-Logger { id: logger }
-
-logger.sendPlaylistState({
-    playlist: "My Favorites",
-    track_count: 150,
-    selected_track: "My Song",
-    selected_index: 42
-})
-```
+| Method                                | Sends                                                         |
+| ------------------------------------- | ------------------------------------------------------------- |
+| `logger.sendDeckState(deckId, state)` | Deck play state, BPM, track info — shown in Live Metadata tab |
+| `logger.sendMasterState(state)`       | Master BPM and tempo                                          |
+| `logger.sendPlaylistState(state)`     | Playlist name, track count, selected track                    |
 
 ### Dashboard Tabs
 
@@ -474,107 +379,6 @@ On the **Live Metadata** tab, click the **⛶ Fullscreen** button to enter fulls
 - Manual logs for tracking application events and state changes
 - Live metadata for monitoring system state in real-time
 - No extra UI instrumentation needed to inspect current values
-
----
-
-## Advanced Metadata Endpoints
-
-The server accepts several optional metadata endpoints for extended monitoring. These are **not used by default** but can be integrated by QML code to send additional telemetry:
-
-### POST `/updateDeckAudio/<deck>`
-
-Send deck audio control state (volume, EQ, filter).
-
-**Expected data**:
-
-```json
-{
-  "volume": 0.75,
-  "eq_low": 0.0,
-  "eq_mid": 0.2,
-  "eq_high": -0.1,
-  "filter": 0.5
-}
-```
-
-**Usage**: Send from ApiDeck module or custom QML signal handler.
-
-### POST `/updateDeckEffects/<deck>`
-
-Send active effects for a deck.
-
-**Expected data**:
-
-```json
-{
-  "active": ["reverb", "delay"],
-  "reverb_amount": 0.6,
-  "delay_time": 500,
-  "delay_feedback": 0.4
-}
-```
-
-### POST `/updateDeckLoop/<deck>`
-
-Send loop state and sizing.
-
-**Expected data**:
-
-```json
-{
-  "active": true,
-  "length": 8.0,
-  "size": "8 Beat",
-  "in_pos": 10.5,
-  "out_pos": 18.5
-}
-```
-
-### POST `/updateDeckCues/<deck>`
-
-Send cue point information.
-
-**Expected data**:
-
-```json
-{
-  "cues": [
-    { "name": "Intro", "pos": 5.2, "type": "cue" },
-    { "name": "Build", "pos": 32.0, "type": "cue" },
-    { "name": "Chorus", "pos": 64.5, "type": "fadeIn" }
-  ]
-}
-```
-
-### POST `/updateMasterAudio`
-
-Send master channel audio control state.
-
-**Expected data**:
-
-```json
-{
-  "volume": 0.85,
-  "crossfader": 0.5,
-  "headphone_mix": 0.3,
-  "headphone_volume": 0.9
-}
-```
-
-### POST `/updateBrowser`
-
-Send browser/playlist state (optional telemetry).
-
-**Expected data**:
-
-```json
-{
-  "playlist": "Favorites",
-  "selected_track": "My Song",
-  "selected_index": 42,
-  "total_tracks": 150
-}
-```
 
 ---
 
@@ -609,15 +413,6 @@ Mapping {
 
 ---
 
-## Server Behavior Summary
-
-- Binds to `localhost` by default.
-- Logs are in-memory (cleared when server restarts).
-- Dashboard is served from `server.py` and auto-refreshes.
-- Uses HTTP JSON endpoints for log and metadata updates.
-
----
-
 ## Development Workflow
 
 ### Testing from GitHub Branches
@@ -641,21 +436,9 @@ To iterate on traktor-logger locally without GitHub round-trips:
 # Clone locally
 git clone https://github.com/lsmith77/traktor-logger.git ~/dev/traktor-logger
 
-# Install directly from local clone
-traktor-mod --source ~/dev/traktor-logger
-
-# Edit files in ~/dev/traktor-logger/
-# Reinstall (instant):
-traktor-mod --source ~/dev/traktor-logger
+# Install directly from local clone using a symlink
+traktor-mod --source ~/dev/traktor-logger --symlink
 ```
-
-### Full Documentation
-
-For complete development workflows, branch management, and local development patterns:
-
-📖 **[LOGGER_DEVELOPMENT_WORKFLOW.md](../LOGGER_DEVELOPMENT_WORKFLOW.md)** — comprehensive guide with scenarios, troubleshooting, and best practices
-
-📋 **[LOGGER_QUICK_REFERENCE.md](../LOGGER_QUICK_REFERENCE.md)** — command quick reference
 
 ---
 
