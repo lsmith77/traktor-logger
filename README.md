@@ -6,9 +6,7 @@ Version: v1.2.0
 
 ## Why This Exists
 
-When working with Traktor QML mods, understanding application behavior and controller state is essential:
-
-- ✅ **This tool**: Real-time HTTP-based logging and event monitoring displayed in a browser dashboard
+When working with Traktor QML mods, understanding application behavior and controller state is essential. This tool provides real-time HTTP-based logging and event monitoring in a browser dashboard — no restarts or log-file hunting.
 
 ## Credits
 
@@ -19,11 +17,11 @@ https://github.com/ErikMinekus/traktor-api-client
 The playlist API layer is based on the work from DJMirror:
 https://www.patreon.com/cw/DjMirrorTraktor
 
-Both projects where pivotal in the creation of this solution that integrates both concepts and advances the APIs while providing a ready made UI.
+Both projects were pivotal in the creation of this solution that integrates both concepts and advances the APIs while providing a ready-made UI.
 
 ## API Client Integration
 
-First install the `traktor-mod` script from (for manual install instructions see #manual-installation-without-traktor-mod):
+First install the `traktor-mod` script (for manual install instructions see [Manual Installation](#manual-installation-without-traktor-mod)):
 
 - https://github.com/lsmith77/traktor-kontrol-qml
 - Setup and usage guide: https://github.com/lsmith77/traktor-kontrol-qml/blob/main/00_HANDBOOK.md
@@ -50,7 +48,7 @@ traktor-mod --source ~/.traktor-mod/traktor-logger
 
 This installs Logger.qml, the qmldir module registration, and all Api components into Traktor's QML.
 
-### 1b. Wire ApiModule into a controller
+### 2. Wire ApiModule into a controller
 
 ```bash
 traktor-mod logger api S8 # use D2 if you have a physical D2
@@ -58,9 +56,9 @@ traktor-mod logger api S8 # use D2 if you have a physical D2
 
 `logger api S8` injects `ApiModule {}` into the S8 controller QML. You don't need a physical S8 — see step 2.
 
-### 2. Register S8 in Traktor's Controller Manager
+### 3. Register S8 in Traktor's Controller Manager
 
-Traktor only loads a controller's QML when that controller is registered. Skip this stepif you have a physical S8 or D2 connected.
+Traktor only loads a controller's QML when that controller is registered. Skip this step if you have a physical S8 or D2 connected.
 
 Adding S8 as a pre-mapped controller (even without the hardware) is enough:
 
@@ -69,13 +67,13 @@ Adding S8 as a pre-mapped controller (even without the hardware) is enough:
 3. Select the **Controller Manager** tab
 4. Click **Add** → **Pre-Mapped** → **Traktor Kontrol** → **S8**
 
-### 3. Start the logger server
+### 4. Start the logger server
 
 ```bash
 traktor-mod server start
 ```
 
-### 4. Open dashboard and test
+### 5. Open dashboard and test
 
 Open `http://localhost:8080`, restart Traktor, and interact with decks to verify both tabs update.
 
@@ -295,9 +293,7 @@ Enable metadata API integration on at least one connected controller to automati
    traktor-mod logger api S8
    ```
 
-> No need to add a pre-mapped S8 as noted in step 2 for:
-> **D2 users**: use `logger api D2`
-> **S8 users**: use `logger api S8`
+> **D2 users**: use `logger api D2` instead. **S8 users**: use `logger api S8`. Both can skip step 3 (no virtual controller registration needed).
 
 2. **Register S8 in Traktor** (skip if you used D2 or have a physical S8):
    - Traktor: **Preferences** (⌘, / Ctrl+,) → **Controller Manager** → **Add** → **Pre-Mapped** → **Traktor Kontrol** → **S8**
@@ -347,8 +343,6 @@ This is by design: the logger monitors Traktor's message stream for new events, 
 
 If automatic collection doesn't suit your needs, you can manually send metadata from your QML code:
 
-### Metadata API
-
 | Method                                | Sends                                                         |
 | ------------------------------------- | ------------------------------------------------------------- |
 | `logger.sendDeckState(deckId, state)` | Deck play state, BPM, track info — shown in Live Metadata tab |
@@ -373,12 +367,6 @@ On the **Live Metadata** tab, click the **⛶ Fullscreen** button to enter fulls
 
 - Click the **✕** close button in the top-right corner
 - Press **ESC** key
-
-**Benefits**:
-
-- Manual logs for tracking application events and state changes
-- Live metadata for monitoring system state in real-time
-- No extra UI instrumentation needed to inspect current values
 
 ---
 
@@ -439,12 +427,6 @@ git clone https://github.com/lsmith77/traktor-logger.git ~/dev/traktor-logger
 # Install directly from local clone using a symlink
 traktor-mod --source ~/dev/traktor-logger --symlink
 ```
-
----
-
-## Security
-
-Do not log secrets (passwords, tokens, keys, personal data). Dashboard and terminal output are intended for local debugging.
 
 ---
 

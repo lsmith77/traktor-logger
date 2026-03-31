@@ -52,7 +52,7 @@ Installs a structured logging component and an automatic metadata collection lay
 
 ### Not Tested On
 
-- S4MK3, X1MK3, Z1Mk2 make might lead to duplicate metadata being send
+- S4MK3, X1MK3, Z1MK2 — may lead to duplicate metadata being sent
 
 ---
 
